@@ -39,7 +39,9 @@ def xlsx_bytes(df: pd.DataFrame) -> bytes:
     return output.getvalue()
 
 
-def load_sample_file() -> tuple[str, bytes]:
+def load_sample_file() -> tuple[str, bytes] | None:
+    if not SAMPLE_FILE.exists():
+        return None
     return SAMPLE_FILE.name, SAMPLE_FILE.read_bytes()
 
 
@@ -48,20 +50,24 @@ st.caption("Upload a CSV or Excel file, review common quality issues, and downlo
 
 with st.expander("Try it with sample data", expanded=True):
     st.write("Use the included messy sample to see the checks and downloads without preparing a file first.")
-    sample_name, sample_bytes = load_sample_file()
-    sample_columns = st.columns(2)
-    if sample_columns[0].button("Use sample data", use_container_width=True):
-        st.session_state["sample_data"] = {
-            "name": sample_name,
-            "bytes": sample_bytes,
-        }
-    sample_columns[1].download_button(
-        "Download sample CSV",
-        data=sample_bytes,
-        file_name=sample_name,
-        mime="text/csv",
-        use_container_width=True,
-    )
+    sample_file = load_sample_file()
+    if sample_file is None:
+        st.warning("Sample data is not available in this deployment. Upload your own CSV or Excel file to continue.")
+    else:
+        sample_name, sample_bytes = sample_file
+        sample_columns = st.columns(2)
+        if sample_columns[0].button("Use sample data", use_container_width=True):
+            st.session_state["sample_data"] = {
+                "name": sample_name,
+                "bytes": sample_bytes,
+            }
+        sample_columns[1].download_button(
+            "Download sample CSV",
+            data=sample_bytes,
+            file_name=sample_name,
+            mime="text/csv",
+            use_container_width=True,
+        )
 
 uploaded_file = st.file_uploader("Upload CSV or XLSX", type=["csv", "xlsx", "xls"])
 

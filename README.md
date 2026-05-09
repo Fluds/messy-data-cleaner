@@ -72,12 +72,6 @@ app.py
 
 No secrets, API keys, database, or external services are required.
 
-## Screenshots
-
-Placeholder:
-
-![Messy Data Cleaner screenshot](docs/screenshot-placeholder.png)
-
 ## Current Limitations
 
 - Best for small to medium files that fit comfortably in memory.
@@ -91,4 +85,4 @@ Placeholder:
 
 This demo can be adapted for team-specific workflows, reports, validation rules, or internal data templates.
 
-Contact: add your preferred contact link or email here.
+Contact: open a GitHub issue in this repository.
