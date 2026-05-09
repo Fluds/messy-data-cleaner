@@ -13,7 +13,10 @@ def _render_list(items: list[str]) -> str:
     return f"<ul>{rows}</ul>"
 
 
-def _render_missing_values(missing_values: dict[str, int]) -> str:
+def _render_missing_values(
+    missing_values: dict[str, int],
+    missing_percentages: dict[str, float],
+) -> str:
     if not missing_values:
         return "<p>No missing values detected.</p>"
 
@@ -21,12 +24,13 @@ def _render_missing_values(missing_values: dict[str, int]) -> str:
         "<tr>"
         f"<td>{escape(column)}</td>"
         f"<td>{count}</td>"
+        f"<td>{missing_percentages.get(column, 0.0):.1f}%</td>"
         "</tr>"
         for column, count in missing_values.items()
     )
     return f"""
     <table>
-        <thead><tr><th>Column</th><th>Missing values</th></tr></thead>
+        <thead><tr><th>Column</th><th>Missing values</th><th>Missing %</th></tr></thead>
         <tbody>{rows}</tbody>
     </table>
     """
@@ -40,6 +44,7 @@ def generate_html_report(
 ) -> str:
     before_rows, before_columns = original_df.shape
     after_rows, after_columns = cleaned_df.shape
+    issue_summary = issues.get("summary", {})
 
     return f"""<!doctype html>
 <html lang="en">
@@ -123,6 +128,10 @@ def generate_html_report(
     <h1>Messy Data Cleaner Report</h1>
     <p class="subtitle">A concise data quality summary for the uploaded file.</p>
 
+    <h2>Summary</h2>
+    <p><strong>{escape(issue_summary.get("headline", "Data quality summary"))}</strong></p>
+    <p>{escape(issue_summary.get("details", "Review the sections below for details."))}</p>
+
     <section class="metrics">
         <div class="metric"><span>Original shape</span><strong>{before_rows} x {before_columns}</strong></div>
         <div class="metric"><span>Cleaned shape</span><strong>{after_rows} x {after_columns}</strong></div>
@@ -139,7 +148,7 @@ def generate_html_report(
     {_render_list(issues["constant_columns"])}
 
     <h2>Missing Value Summary</h2>
-    {_render_missing_values(issues["missing_values"])}
+    {_render_missing_values(issues["missing_values"], issues.get("missing_percentages", {}))}
 
     <h2>Applied Cleaning Steps</h2>
     {_render_list(applied_steps)}

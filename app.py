@@ -1,17 +1,25 @@
+from io import BytesIO
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
-from messy_data_cleaner import CleaningOptions, analyze_dataframe, clean_dataframe
+from messy_data_cleaner import (
+    CleaningOptions,
+    analyze_dataframe,
+    clean_dataframe,
+    summarize_issues,
+)
 from messy_data_cleaner.report import generate_html_report
 
 
 st.set_page_config(page_title="Messy Data Cleaner", layout="wide")
 
+SAMPLE_FILE = Path("examples/messy_sample.csv")
+
 
 @st.cache_data(show_spinner=False)
 def load_uploaded_file(file_name: str, file_bytes: bytes) -> pd.DataFrame:
-    from io import BytesIO
-
     buffer = BytesIO(file_bytes)
     if file_name.lower().endswith(".csv"):
         return pd.read_csv(buffer)
@@ -24,22 +32,64 @@ def csv_bytes(df: pd.DataFrame) -> bytes:
     return df.to_csv(index=False).encode("utf-8")
 
 
+def xlsx_bytes(df: pd.DataFrame) -> bytes:
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Cleaned Data")
+    return output.getvalue()
+
+
+def load_sample_file() -> tuple[str, bytes]:
+    return SAMPLE_FILE.name, SAMPLE_FILE.read_bytes()
+
+
 st.title("Messy Data Cleaner")
 st.caption("Upload a CSV or Excel file, review common quality issues, and download a cleaned file plus a simple HTML report.")
 
+with st.expander("Try it with sample data", expanded=True):
+    st.write("Use the included messy sample to see the checks and downloads without preparing a file first.")
+    sample_name, sample_bytes = load_sample_file()
+    sample_columns = st.columns(2)
+    if sample_columns[0].button("Use sample data", use_container_width=True):
+        st.session_state["sample_data"] = {
+            "name": sample_name,
+            "bytes": sample_bytes,
+        }
+    sample_columns[1].download_button(
+        "Download sample CSV",
+        data=sample_bytes,
+        file_name=sample_name,
+        mime="text/csv",
+        use_container_width=True,
+    )
+
 uploaded_file = st.file_uploader("Upload CSV or XLSX", type=["csv", "xlsx", "xls"])
 
-if uploaded_file is None:
-    st.info("Try the sample file in `examples/messy_sample.csv` or upload your own dataset.")
+if uploaded_file is not None:
+    file_name = uploaded_file.name
+    file_bytes = uploaded_file.getvalue()
+elif "sample_data" in st.session_state:
+    file_name = st.session_state["sample_data"]["name"]
+    file_bytes = st.session_state["sample_data"]["bytes"]
+    st.info(f"Using sample file: `{file_name}`")
+else:
+    st.info("Upload your own file or use the sample data above.")
     st.stop()
 
 try:
-    original_df = load_uploaded_file(uploaded_file.name, uploaded_file.getvalue())
+    original_df = load_uploaded_file(file_name, file_bytes)
 except Exception as exc:
     st.error(f"Could not read this file: {exc}")
     st.stop()
 
 issues = analyze_dataframe(original_df)
+summary = summarize_issues(issues)
+issues["summary"] = summary
+
+if summary["count"] == 0:
+    st.success(summary["headline"])
+else:
+    st.warning(f"{summary['headline']}: {summary['details']}")
 
 metric_columns = st.columns(4)
 metric_columns[0].metric("Rows", f"{original_df.shape[0]:,}")
@@ -72,8 +122,14 @@ with issues_tab:
         if issues["missing_values"]:
             missing_df = (
                 pd.DataFrame(
-                    issues["missing_values"].items(),
-                    columns=["Column", "Missing values"],
+                    [
+                        {
+                            "Column": column,
+                            "Missing values": count,
+                            "Missing %": issues["missing_percentages"][column],
+                        }
+                        for column, count in issues["missing_values"].items()
+                    ],
                 )
                 .sort_values("Missing values", ascending=False)
                 .reset_index(drop=True)
@@ -114,7 +170,7 @@ with cleaning_tab:
     st.subheader("Cleaned preview")
     st.dataframe(cleaned_df.head(20), use_container_width=True)
 
-    download_columns = st.columns(2)
+    download_columns = st.columns(3)
     download_columns[0].download_button(
         "Download cleaned CSV",
         data=csv_bytes(cleaned_df),
@@ -123,6 +179,13 @@ with cleaning_tab:
         use_container_width=True,
     )
     download_columns[1].download_button(
+        "Download cleaned XLSX",
+        data=xlsx_bytes(cleaned_df),
+        file_name="cleaned_data.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
+    download_columns[2].download_button(
         "Download HTML report",
         data=report_html,
         file_name="data_quality_report.html",

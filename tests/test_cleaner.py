@@ -1,6 +1,11 @@
 import pandas as pd
 
-from messy_data_cleaner.cleaner import CleaningOptions, analyze_dataframe, clean_dataframe
+from messy_data_cleaner.cleaner import (
+    CleaningOptions,
+    analyze_dataframe,
+    clean_dataframe,
+    summarize_issues,
+)
 
 
 def messy_frame() -> pd.DataFrame:
@@ -27,8 +32,31 @@ def test_analyze_dataframe_detects_common_issues() -> None:
         "Empty": 4,
         "Status": 1,
     }
+    assert issues["missing_percentages"] == {
+        " Name ": 25.0,
+        "Department": 25.0,
+        "Empty": 100.0,
+        "Status": 25.0,
+    }
     assert issues["suspicious_column_names"] == [" Name "]
     assert set(issues["constant_columns"]) == {"Empty", "Status"}
+
+
+def test_summarize_issues_returns_clear_headline() -> None:
+    summary = summarize_issues(analyze_dataframe(messy_frame()))
+
+    assert summary["headline"] == "Data quality issues found"
+    assert summary["count"] > 0
+    assert "duplicate row(s)" in summary["details"]
+
+
+def test_summarize_issues_handles_clean_data() -> None:
+    clean_frame = pd.DataFrame({"Name": ["Ada", "Grace"], "Score": [91, 88]})
+
+    summary = summarize_issues(analyze_dataframe(clean_frame))
+
+    assert summary["headline"] == "No major issues found"
+    assert summary["count"] == 0
 
 
 def test_clean_dataframe_applies_selected_options() -> None:
